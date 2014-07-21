@@ -24,25 +24,40 @@ void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 
 }
 
-void Kernel::createKDtree ( float &x, float &y, float &z )
+void Kernel::createKDtree ( std::vector<Kernel> &allKern )
 {
-
-  std::cout << "Creating KDTree." << std::flush << std::endl;
 
   // Initialize the KDtree.
   kdtree *tree;
   tree = kd_create (3);
 
+  // Determine total number of gll points.
+  int totalGLL = 0;
+  for ( size_t i=0; i<allKern.size(); i++ )
+    totalGLL += allKern[i].numGLL;
+
+
   // Initizalize the data array.
-  KDdat = new int [numGLL];
+  KDdat = new int [totalGLL];
 
-  // Populate the tree with an index (KDdat) and x, y, z.
-  for ( size_t i=0; i<numGLL; i++ )
+  // Populate the tree with an index (KDdat) and x, y, z
+  // We need to loop over both mesh chunks and gll points.
+  int totIter = 0;
+  for ( size_t chunk=0; chunk<allKern.size(); chunk++ ) 
   {
-    KDdat[i] = i;
-    kd_insert3 ( tree, xExt[i], yExt[i], zExt[i], &KDdat[i] );
 
-  }
+    std::cout << "Creating KDtree for chunk " << chunk << "." << std::flush << std::endl;
+    for ( size_t i=0; i<allKern[chunk].numGLL; i++ )
+    {
+      KDdat[totIter] = totIter;
+      kd_insert3 ( tree, 
+                   allKern[chunk].xExt[i], 
+                   allKern[chunk].yExt[i], 
+                   allKern[chunk].zExt[i], 
+                   &KDdat[i] );
+      totIter++;
+    }
+  } 
 
 }
 
@@ -97,4 +112,37 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
     std::exit ( EXIT_FAILURE );
 
   }
+
+}
+
+void Kernel::getMinMaxCartesian ()
+{
+
+  minX = xExt[0];
+  maxX = xExt[0];
+  minY = yExt[0];
+  maxY = yExt[0];
+  minZ = zExt[0];
+  maxZ = zExt[0];
+  for ( int i=0; i<numGLL; i++ )
+  {
+    
+    if ( xExt[i] < minX )
+      minX = xExt[i];
+    if ( xExt[i] > maxX )
+      maxX = xExt[i];
+
+    if ( yExt[i] < minY )
+      minY = yExt[i];
+    if ( yExt[i] > maxY )
+      maxY = yExt[i];
+
+    if ( zExt[i] < minZ )
+      minZ = zExt[i];
+    if ( zExt[i] > maxZ )
+      maxZ = zExt[i];
+
+  }
+
+
 }
