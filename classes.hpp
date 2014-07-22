@@ -14,7 +14,6 @@ public:
   float *xExt;
   float *yExt;
   float *zExt;
-  float *param;
 
   // These values hold the min/max points for kernal mesh.
   float minX;
@@ -38,6 +37,7 @@ public:
 
   // This array holds the data (indices) for the kdtree.
   int *KDdat;
+  kdtree *tree;
 
   // This array holds the gll kernel values from one processor.
   float *kernStore;
@@ -47,6 +47,7 @@ public:
   void readNetcdf          ( std::string mode, std::string fname );
   void interpolate         ( float &x, float &y, float &z );
   void createKDtree        ( std::vector<Kernel> &allKern );
+  void mergeKernels        ( std::vector<Kernel> &allKern );
   void createRegMesh       ( std::vector<Kernel> &allKern );
   void getMinMaxCartesian  ( );
 

@@ -28,14 +28,12 @@ void Kernel::createKDtree ( std::vector<Kernel> &allKern )
 {
 
   // Initialize the KDtree.
-  kdtree *tree;
   tree = kd_create (3);
 
   // Determine total number of gll points.
   int totalGLL = 0;
   for ( size_t i=0; i<allKern.size(); i++ )
     totalGLL += allKern[i].numGLL;
-
 
   // Initizalize the data array.
   KDdat = new int [totalGLL];
@@ -57,6 +55,42 @@ void Kernel::createKDtree ( std::vector<Kernel> &allKern )
                    &KDdat[i] );
       totIter++;
     }
+
+    /* After we've created the KDtree, we no longer need the
+     * inital coordinate arrays 
+     */
+    delete [] allKern[chunk].xExt;
+    delete [] allKern[chunk].yExt;
+    delete [] allKern[chunk].zExt;
+
+  } 
+
+}
+
+void Kernel::mergeKernels ( std::vector<Kernel> &allKern )
+{
+
+  // Determine total number of gll points.
+  int totalGLL = 0;
+  for ( size_t i=0; i<allKern.size(); i++ )
+    totalGLL += allKern[i].numGLL;
+
+  // Initialize parameter array.
+  kernStore = new float [totalGLL];
+
+  // Copy to master parameter array.
+  int totIter = 0;
+  for ( size_t i=0; i<allKern.size(); i++ ) 
+  {
+    for ( size_t j=0; j<allKern[i].numGLL; j++ ) 
+    {
+      kernStore[totIter] = allKern[i].kernStore[j];
+      totIter++;
+    }
+
+    /* Free memory associated with the original kernal storage
+     */
+    delete [] allKern[i].kernStore;
   } 
 
 }
@@ -75,7 +109,7 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
     if ( mode == "kernel" )
     {
 
-      NcVar gllValues = dataFile.getVar  ("param");
+      NcVar gllValues = dataFile.getVar  ("kernel");
       NcDim dim       = gllValues.getDim (0);
       numGLL          = dim.getSize      ();
 
@@ -107,7 +141,7 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
   catch (NcException &e)
   {
 
-    e.what();
+    std::cout << e.what() << std::endl;
     std::cout << "Failure reading in kernel." << std::endl;
     std::exit ( EXIT_FAILURE );
 

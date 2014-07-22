@@ -47,7 +47,7 @@ int main ()
 
     xyzNameBase.append ( ssPrcShort.str() );
 
-    kern.readNetcdf ( "param", fNameBase );
+    kern.readNetcdf ( "kernel", fNameBase );
     kern.readNetcdf ( "coordinates", xyzNameBase );
     /*
      * This part could be replaced by food from python 
@@ -59,6 +59,7 @@ int main ()
   }
 
   kern.createKDtree ( allKern );
+  kern.mergeKernels ( allKern );
   createRegMesh     ( kern, allKern );
 
   return 0;
@@ -107,27 +108,44 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
   long NZ = int ( ((kern.maxZBox - kern.minZBox) / DZ) + 1);
 
 
-  kern.regMeshArr = new float [NY*NY*NZ];
+  kern.regMeshArr = new float [NX*NY*NZ];
   float (*regMesh)[NX][NY][NZ] = ( (float (*)[NX][NY][NZ]) kern.regMeshArr );
+//  float (&regMesh)[NX][NY][NZ] = *reinterpret_cast<float (*)[NX][NY][NZ]>(&regMeshArr);
 
   float x = 0;
   float y = 0;
   float z = 0;
 
-//##pragma omp parallel for 
+  std::cout << "NX " << NX << std::endl;
+  *regMesh[8][0][0] = 1.;
+  std::cout << "TESTING" << std::flush << std::endl;
+  std::cout << *regMesh[1][0][0] << std::endl;
+
+#pragma omp parallel for 
   for ( int i=0; i<NX; i++ ) {
     for ( int j=0; j<NY; j++ ) {
       for ( int k=0; k<NZ; k++ ) {
 
         x = kern.minXBox + i * DX;
-        y = kern.minYBox + i * DY;
-        z = kern.minZBox + i * DZ;
+        y = kern.minYBox + j * DY;
+        z = kern.minZBox + k * DZ;
 
-//        regMesh[i][j][k] = kd
+        kdres *set;
+        void  *ind;
+        int    pnt;
 
+        set = kd_nearest3 ( kern.tree, x, y, z );
+        ind = kd_res_item_data ( set );
+        pnt = * ( int * ) ind;
+        kd_res_free ( set );
+
+        *regMesh[i][j][k] = kern.kernStore[pnt];
+//        std::cout << x << ' ' << y << ' ' << z << ' ' << pnt << std::flush << std::endl;
+//        std::cin.get();
 
       }
     }
+    std::cout << "Done 1" << std::flush << std::endl;
   }
 
 }
