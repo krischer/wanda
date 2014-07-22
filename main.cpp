@@ -6,60 +6,73 @@
 #include <iomanip>
 #include <iostream>
 
+#include "mpi.h"
+
 int main ()
 {
 
-  Kernel kern;
+  MPI::Init ();
+  int rank = MPI::COMM_WORLD.Get_rank ();
+  int size = MPI::COMM_WORLD.Get_size ();
 
   std::vector <Kernel> allKern;
+  Kernel kern;
+  void *nProcBuf;
 
-  std::cout << "Hello world." << std::endl;
-  std::cout << "How many processors." << std::endl;
-
-  int nProc;
-  std::cin >> nProc;
-
-  allKern.reserve (nProc);
-
-  for ( int i=0; i<nProc; i++ )
+  if ( rank == 0 )
   {
 
-    Kernel kern;
+    std::cout << "Hello world." << std::endl;
+    std::cout << "How many processors." << std::endl;
 
-    /*
-     * This part could be replaced by food from python 
-     */
-    std::string fNameBase = "./testKernels/proc";
-    std::string fNameApp  = "_reg1_betah_kernel.nc";
+    int nProc;
+    std::cin >> nProc;
 
-    std::string xyzNameBase = "./cemRequest/xyz_reg01_proc";
+    allKern.reserve (nProc);
 
-    std::stringstream ssPrc;
-    ssPrc << std::setw (6) << std::setfill ('0');
-    ssPrc << std::to_string (i);
+    for ( int i=0; i<nProc; i++ )
+    {
 
-    std::stringstream ssPrcShort;
-    ssPrcShort << std::setw (4) << std::setfill ('0');
-    ssPrcShort << std::to_string (i);
+      Kernel kern;
 
-    fNameBase.append ( ssPrc.str() );
-    fNameBase.append ( fNameApp );
+      /*
+       * This part could be replaced by food from python 
+       */
+      std::string fNameBase = "./testKernels/proc";
+      std::string fNameApp  = "_reg1_betah_kernel.nc";
 
-    xyzNameBase.append ( ssPrcShort.str() );
+      std::string xyzNameBase = "./cemRequest/xyz_reg01_proc";
 
-    kern.readNetcdf ( "kernel", fNameBase );
-    kern.readNetcdf ( "coordinates", xyzNameBase );
-    /*
-     * This part could be replaced by food from python 
-     */
+      std::stringstream ssPrc;
+      ssPrc << std::setw (6) << std::setfill ('0');
+      ssPrc << std::to_string (i);
 
-    kern.getMinMaxCartesian ();
-    allKern.push_back       (kern);
+      std::stringstream ssPrcShort;
+      ssPrcShort << std::setw (4) << std::setfill ('0');
+      ssPrcShort << std::to_string (i);
 
+      fNameBase.append ( ssPrc.str() );
+      fNameBase.append ( fNameApp );
+
+      xyzNameBase.append ( ssPrcShort.str() );
+
+      kern.readNetcdf ( "kernel", fNameBase );
+      kern.readNetcdf ( "coordinates", xyzNameBase );
+      /*
+       * This part could be replaced by food from python 
+       */
+
+      kern.getMinMaxCartesian ();
+      allKern.push_back       (kern);
+
+    }
   }
+
+  MPI::COMM_WORLD.Bcast ( nProcBuf, 1, MPI_INT, 0 );
 
   kern.createKDtree ( allKern );
   kern.mergeKernels ( allKern );
+
   createRegMesh     ( kern, allKern );
 
   return 0;
@@ -71,7 +84,7 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
 
   float DX = 10.;
   float DY = 10.;
-  float DZ = 1.;
+  float DZ = 10.;
 
   // Initialize box values.
   kern.minXBox = allKern[0].minX;
@@ -116,15 +129,9 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
   float y = 0;
   float z = 0;
 
-  std::cout << "NX " << NX << std::endl;
-  *regMesh[8][0][0] = 1.;
-  std::cout << "TESTING" << std::flush << std::endl;
-  std::cout << *regMesh[1][0][0] << std::endl;
-
-#pragma omp parallel for 
-  for ( int i=0; i<NX; i++ ) {
-    for ( int j=0; j<NY; j++ ) {
-      for ( int k=0; k<NZ; k++ ) {
+  for ( size_t i=0; i<NX; i++ ) {
+    for ( size_t j=0; j<NY; j++ ) {
+      for ( size_t k=0; k<NZ; k++ ) {
 
         x = kern.minXBox + i * DX;
         y = kern.minYBox + j * DY;
@@ -139,13 +146,12 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
         pnt = * ( int * ) ind;
         kd_res_free ( set );
 
-        *regMesh[i][j][k] = kern.kernStore[pnt];
-//        std::cout << x << ' ' << y << ' ' << z << ' ' << pnt << std::flush << std::endl;
-//        std::cin.get();
+        kern.regMeshArr[k + j * NY + i * NY * NX];
 
       }
     }
-    std::cout << "Done 1" << std::flush << std::endl;
+
+    std::cout << i << std::endl;
   }
 
 }
