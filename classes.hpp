@@ -43,7 +43,7 @@ public:
 
   // This array holds the gll kernel values from one processor.
   float *kernStore;
-  int    numGLL;
+  int    numGLL = 0;
 
   // These are the functions.
   void readNetcdf          ( std::string mode, std::string fname );

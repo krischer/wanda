@@ -31,40 +31,18 @@ void Kernel::createKDtree ( std::vector<Kernel> &allKern )
   // Initialize the KDtree.
   tree = kd_create (3);
 
-  // Determine total number of gll points.
-  int totalGLL = 0;
-  for ( size_t i=0; i<allKern.size(); i++ )
-    totalGLL += allKern[i].numGLL;
-
   // Initizalize the data array.
-  KDdat = new int [totalGLL];
+  KDdat = new int [numGLL];
 
   // Populate the tree with an index (KDdat) and x, y, z
   // We need to loop over both mesh chunks and gll points.
-  int totIter = 0;
-  for ( size_t chunk=0; chunk<allKern.size(); chunk++ ) 
+  if ( MPI::COMM_WORLD.Get_rank() == 0 )
+    std::cout << "Creating KDtree." << std::flush << std::endl;
+  for ( size_t i=0; i<numGLL; i++ )
   {
-
-    if ( MPI::COMM_WORLD.Get_rank() == 0 )
-      std::cout << "Creating KDtree for chunk " << chunk << "." << std::flush << std::endl;
-    for ( size_t i=0; i<allKern[chunk].numGLL; i++ )
-    {
-      KDdat[totIter] = totIter;
-      kd_insert3 ( tree, 
-                   allKern[chunk].xExt[i], 
-                   allKern[chunk].yExt[i], 
-                   allKern[chunk].zExt[i], 
-                   &KDdat[i] );
-      totIter++;
-    }
-
-    // After we've created the KDtree, we no longer need the
-    // inital coordinate arrays. 
-    delete [] allKern[chunk].xExt;
-    delete [] allKern[chunk].yExt;
-    delete [] allKern[chunk].zExt;
-
-  } 
+    KDdat[i] = i;
+    kd_insert3 ( tree, xExt[i], yExt[i], zExt[i], &KDdat[i] );
+  }
 
 }
 
@@ -72,31 +50,35 @@ void Kernel::mergeKernels ( std::vector<Kernel> &allKern )
 {
 
   // Determine total number of gll points.
-  int totalGLL = 0;
   for ( size_t i=0; i<allKern.size(); i++ )
-    totalGLL += allKern[i].numGLL;
+    numGLL += allKern[i].numGLL;
 
   // Initialize parameter array.
-  kernStore = new float [totalGLL];
+  kernStore = new float [numGLL];
+
+  // Initialize coordinate arrays.
+  xExt = new float [numGLL]; 
+  yExt = new float [numGLL]; 
+  zExt = new float [numGLL]; 
 
   // Copy to master parameter array.
   int totIter = 0;
-  for ( size_t i=0; i<allKern.size(); i++ ) 
+  for ( size_t chunk=0; chunk<allKern.size(); chunk++ ) 
   {
-    for ( size_t j=0; j<allKern[i].numGLL; j++ ) 
+    for ( size_t j=0; j<allKern[chunk].numGLL; j++ ) 
     {
-      kernStore[totIter] = allKern[i].kernStore[j];
-      xExt[totIter]      = allKern[i].xExt[j];
-      yExt[totIter]      = allKern[i].yExt[j];
-      zExt[totIter]      = allKern[i].zExt[j];
+      kernStore[totIter] = allKern[chunk].kernStore[j];
+      xExt[totIter]      = allKern[chunk].xExt[j];
+      yExt[totIter]      = allKern[chunk].yExt[j];
+      zExt[totIter]      = allKern[chunk].zExt[j];
       totIter++;
     }
 
     // Free memory associated with the original kernal storage 
-    delete [] allKern[i].kernStore;
-    delete [] allKern[i].xExt;
-    delete [] allKern[i].yExt;
-    delete [] allKern[i].zExt;
+    delete [] allKern[chunk].kernStore;
+    delete [] allKern[chunk].xExt;
+    delete [] allKern[chunk].yExt;
+    delete [] allKern[chunk].zExt;
   } 
 
 }

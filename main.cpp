@@ -53,12 +53,12 @@ int main ()
     // Get proc num name for kernel.
     std::stringstream ssPrc;
     ssPrc << std::setw (6) << std::setfill ('0');
-    ssPrc << std::to_string (i);
+    ssPrc << std::to_string (static_cast<long long>(i));
 
     // Get proc num name for coordinates.
     std::stringstream ssPrcShort;
     ssPrcShort << std::setw (4) << std::setfill ('0');
-    ssPrcShort << std::to_string (i);
+    ssPrcShort << std::to_string (static_cast<long long>(i));
 
     // Create full file string.
     fNameBase.append   ( ssPrc.str() );
@@ -76,11 +76,11 @@ int main ()
 
   }
 
-  // Create a single kdtree from the baby kernels.
-  kern.createKDtree ( allKern );
-
   // Merge the kernel data as well.
   kern.mergeKernels ( allKern );
+
+  // Create a single kdtree from the baby kernels.
+  kern.createKDtree ( allKern );
 
   // Go ahead and create the regular mesh.
   createRegMesh     ( kern, allKern );
