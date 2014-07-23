@@ -22,6 +22,9 @@ public:
   float maxX;
   float maxY;
   float maxZ;
+  float centerX;
+  float centerY;
+  float centerZ;
 
   // These values hold the min/max for the entire regMesh.
   float minXBox;
@@ -50,8 +53,13 @@ public:
   void createKDtree        ( std::vector<Kernel> &allKern );
   void mergeKernels        ( std::vector<Kernel> &allKern );
   void createRegMesh       ( std::vector<Kernel> &allKern );
+  void quickSort           ( int i1st, int i2nd );
   void getMinMaxCartesian  ( );
 
+  float distFromCenter     ( float &x, float &y, float &z );
+
+  int  pivot               ( int   &i1st, int &i2nd,   
+                             float &d1st, float &d2nd );
 };
 
 void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern );

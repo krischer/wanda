@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <netcdf>
+#include <math.h>
 #include "classes.hpp"
 #include "mpi.h"
 
@@ -185,5 +186,69 @@ void Kernel::getMinMaxCartesian ()
 
   }
 
+  centerX = (minX + maxX) / 2.;
+  centerY = (minY + maxY) / 2.;
+  centerZ = (minZ + maxZ) / 2.;
 
 }
+
+void Kernel::quickSort ( int i1st, int i2nd )
+{
+
+  int pivotElement;
+
+  // Distance of two points from box center.
+  float d1st = distFromCenter ( xExt[i1st], yExt[i1st], zExt[i1st] );
+  float d2nd = distFromCenter ( xExt[i2nd], yExt[i2nd], zExt[i2nd] );
+
+  if ( i1st < i2nd )
+  {
+    pivotElement = pivot ( i1st, i2nd, d1st, d2nd );
+    quickSort ( i1st, pivotElement-1 );
+    quickSort ( pivotElement+1, i2nd );
+  }
+
+}
+
+int Kernel::pivot ( int &i1st, int &i2nd, float &d1st, float &d2nd )
+{
+
+  int p              = i1st;
+  float pivotElement = d1st;
+
+
+  for ( int i=i1st+1; i<=i2nd; i++ )
+  {
+    float dTest = distFromCenter ( xExt[i], yExt[i], zExt[i] );
+    if ( dTest <= pivotElement )
+    {
+      p++;
+      std::swap ( xExt[i], xExt[p] );
+      std::swap ( yExt[i], yExt[p] );
+      std::swap ( zExt[i], zExt[p] );
+      std::swap ( kernStore[i], kernStore[p] );
+    }
+  }
+
+  std::swap ( xExt[p], xExt[i1st] );
+  std::swap ( yExt[p], yExt[i1st] );
+  std::swap ( zExt[p], zExt[i1st] );
+  std::swap ( kernStore[p], kernStore[i1st] );
+
+  return p;
+
+}
+
+float Kernel::distFromCenter ( float &x, float &y, float &z )
+{
+
+  float diffX = ( x - centerX );
+  float diffY = ( y - centerY );
+  float diffZ = ( z - centerZ );
+
+  float dist  = sqrt ( diffX * diffX + diffY * diffY + diffZ * diffZ );
+
+  return dist;
+
+}
+

@@ -13,9 +13,14 @@ int main ()
 {
 
   // Initialize MPI.
+#if defined (withMPI)
   MPI::Init ();
   int rank = MPI::COMM_WORLD.Get_rank ();
   int size = MPI::COMM_WORLD.Get_size ();
+#else
+  int rank = 0;
+  int size = 1;
+#endif
 
   // Initialize master Kernel object, and vector of individual baby chunk
   // kernels (will be read in as netcdf files).
@@ -34,9 +39,11 @@ int main ()
     std::cin >> nProc;
   }
 
+#if defined (withMPI)
   // Broadcast number of processor files.
   MPI::COMM_WORLD.Bcast ( nProcBuf, 1, MPI_INT, 0 );
   allKern.reserve (*nProcBuf);
+#endif
 
   // Loop over input netcdf files.
   for ( int i=0; i<*nProcBuf; i++ )
@@ -76,8 +83,36 @@ int main ()
 
   }
 
+
   // Merge the kernel data as well.
   kern.mergeKernels ( allKern );
+
+  // Find min/max box of full kernel.
+  kern.getMinMaxCartesian ();
+
+  clock_t begin = std::clock();
+  if ( rank == 0 )
+    std::cout << "minDistBeforeSort: " << kern.distFromCenter ( kern.xExt[0], kern.yExt[0], kern.zExt[0] ) << " km." << std::endl;
+
+  // Quicksort by distance from center.
+  kern.quickSort ( 0, kern.numGLL-1 );
+
+  if ( rank == 0 )
+    std::cout << "minDistAfterSort:  " << kern.distFromCenter ( kern.xExt[0], kern.yExt[0], kern.zExt[0] ) << " km." << std::endl;
+
+  clock_t end = std::clock();
+  double elapsed_secs = double (end - begin) / CLOCKS_PER_SEC;
+  if ( rank == 0 )
+    std::cout << "hey mike, sorting [quicksort] took: " << elapsed_secs << " seconds. [scaled up]" 
+      << std::flush << std::endl;
+
+//  for ( int i=0; i<kern.numGLL-1; i++ )
+//  {
+//    float dist1 = kern.distFromCenter ( kern.xExt[i], kern.yExt[i], kern.zExt[i] );
+//    float dist2 = kern.distFromCenter ( kern.xExt[i+1], kern.yExt[i+1], kern.zExt[i+1] );
+//    if ( dist2 < dist1)
+//      std::cout << "BADBADBAD" << std::endl;
+//  }
 
   // Create a single kdtree from the baby kernels.
   kern.createKDtree ( allKern );
@@ -158,6 +193,7 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
   clock_t begin = std::clock();
 
   // Loop over the 3D regular grid.
+  int procDoneCount = 0;
 #pragma omp parallel for schedule (dynamic) 
   for ( size_t i=iStartMPI; i<=iEndMPI; i++ ) {
 
@@ -194,9 +230,9 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
 
       }
     }
-    std::cout << "I'm done: " << rank << std::flush << std::endl;
   }
 
+  std::cout << "I'm done: " << MPI::COMM_WORLD.Get_rank() << ' ' << iStartMPI << ' ' << iEndMPI << std::flush << std::endl;
   clock_t end = std::clock();
 
   MPI::COMM_WORLD.Barrier ();
