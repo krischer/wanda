@@ -26,7 +26,7 @@ void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 
 }
 
-void Kernel::createKDtree ( std::vector<Kernel> &allKern )
+void Kernel::createKDtree ( )
 {
 
   // Initialize the KDtree.
@@ -192,7 +192,26 @@ void Kernel::getMinMaxCartesian ()
 
 }
 
-void Kernel::quickSort ( int i1st, int i2nd )
+void Kernel::quickSortPoint ( int i1st, int i2nd,
+                              float px, float py, float pz )
+{
+
+  int pivotElement;
+
+  // Distance of two points from box center.
+  float d1st = distFromPoint ( xExt[i1st], yExt[i1st], zExt[i1st], px, py, pz );
+  float d2nd = distFromPoint ( xExt[i2nd], yExt[i2nd], zExt[i2nd], px, py, pz );
+
+  if ( i1st < i2nd )
+  {
+    pivotElement = pivot ( i1st, i2nd, d1st, d2nd );
+    quickSortPoint ( i1st, pivotElement-1, px, py, pz );
+    quickSortPoint ( pivotElement+1, i2nd, px, py, pz );
+  }
+
+}
+
+void Kernel::quickSortCenter ( int i1st, int i2nd )
 {
 
   int pivotElement;
@@ -204,8 +223,8 @@ void Kernel::quickSort ( int i1st, int i2nd )
   if ( i1st < i2nd )
   {
     pivotElement = pivot ( i1st, i2nd, d1st, d2nd );
-    quickSort ( i1st, pivotElement-1 );
-    quickSort ( pivotElement+1, i2nd );
+    quickSortCenter ( i1st, pivotElement-1 );
+    quickSortCenter ( pivotElement+1, i2nd );
   }
 
 }
@@ -236,6 +255,20 @@ int Kernel::pivot ( int &i1st, int &i2nd, float &d1st, float &d2nd )
   std::swap ( kernStore[p], kernStore[i1st] );
 
   return p;
+
+}
+
+float Kernel::distFromPoint ( float &x,  float &y,  float &z,
+                              float &px, float &py, float &pz )
+{
+
+  float diffX = ( x - px );
+  float diffY = ( y - py );
+  float diffZ = ( z - pz );
+
+  float dist  = sqrt ( diffX * diffX + diffY * diffY + diffZ * diffZ );
+
+  return dist;
 
 }
 

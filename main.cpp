@@ -1,6 +1,7 @@
 #include "classes.hpp"
 #include "kdtree.h"
 
+#include <algorithm>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -95,7 +96,7 @@ int main ()
     std::cout << "minDistBeforeSort: " << kern.distFromCenter ( kern.xExt[0], kern.yExt[0], kern.zExt[0] ) << " km." << std::endl;
 
   // Quicksort by distance from center.
-  kern.quickSort ( 0, kern.numGLL-1 );
+  kern.quickSortCenter ( 0, kern.numGLL-1 );
 
   if ( rank == 0 )
     std::cout << "minDistAfterSort:  " << kern.distFromCenter ( kern.xExt[0], kern.yExt[0], kern.zExt[0] ) << " km." << std::endl;
@@ -115,7 +116,7 @@ int main ()
 //  }
 
   // Create a single kdtree from the baby kernels.
-  kern.createKDtree ( allKern );
+  kern.createKDtree ( );
 
   // Go ahead and create the regular mesh.
   createRegMesh     ( kern, allKern );
@@ -179,63 +180,84 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
   kern.regZ       = new float [gridSize]();
 
   // Determine the parts of the mesh sent to each processor.
-#if defined (withMPI)
-  int nChunks   = static_cast<int> ( NX / MPI::COMM_WORLD.Get_size() );
-  int iStartMPI = MPI::COMM_WORLD.Get_rank() * nChunks;
-  int iEndMPI   = (MPI::COMM_WORLD.Get_rank() + 1) * nChunks - 1;
-  if ( MPI::COMM_WORLD.Get_rank() == MPI::COMM_WORLD.Get_size()-1 )
-    iEndMPI = NX - 1;
-#else
+  float *sliceDistForward = new float [NX];
+  float *sliceDistSort    = new float [NX];
+  for ( int i=0; i<NX; i++ )
+  {
+    float x = kern.minXBox + i * DX;
+    float y = kern.minYBox + NY/2 * DY;
+    float z = kern.minZBox + NZ/2 * DZ;
+    sliceDistForward[i] = kern.distFromCenter ( x, y, z );
+    sliceDistSort[i]    = kern.distFromCenter ( x, y, z );
+  }
+
+  // Sort the array by (average) distance from center.
+  std::sort    ( sliceDistSort, sliceDistSort+NX );
+
   int iStartMPI = 0;
-  int iEndMPI   = NX - 1;
-#endif
+  int iEndMPI   = 0;
+  for ( int i=0; i<NX; i++ )
+  {
+    if ( sliceDistSort[MPI::COMM_WORLD.Get_rank()] == sliceDistForward[i] )
+    {
+      iStartMPI = i;
+      iEndMPI   = i+1;
+    }
+  }
 
   clock_t begin = std::clock();
 
   // Loop over the 3D regular grid.
-  int procDoneCount = 0;
+  while ( iEndMPI <= NX )
+  {
+
 #pragma omp parallel for schedule (dynamic) 
-  for ( size_t i=iStartMPI; i<=iEndMPI; i++ ) {
+    for ( size_t i=iStartMPI; i<iEndMPI; i++ ) {
 
-    // For the curious: a report.
-    int size      = MPI::COMM_WORLD.Get_size();
-    int rank      = MPI::COMM_WORLD.Get_rank();
-    int threadNum = omp_get_thread_num();
-    int threadSiz = omp_get_num_threads();
-    if ( (rank == 0) && (threadNum == 0) ) 
-      std::cout << "Hi there. I've just launched interpolation on "
-        << size << " nodes, using " << threadSiz << " threads per "
-        << "node. Enjoy your day!" << std::flush << std::endl;
+      // For the curious: a report.
+      int size      = MPI::COMM_WORLD.Get_size();
+      int rank      = MPI::COMM_WORLD.Get_rank();
+      int threadNum = omp_get_thread_num();
+      int threadSiz = omp_get_num_threads();
+      if ( (rank == 0) && (threadNum == 0) ) 
+        std::cout << "Hi there. I've just launched interpolation on "
+          << size << " nodes, using " << threadSiz << " threads per "
+          << "node. Enjoy your day!" << std::flush << std::endl;
 
-    for ( size_t j=0; j<NY; j++ ) {
-      for ( size_t k=0; k<NZ; k++ ) {
+      for ( size_t j=0; j<NY; j++ ) {
+        for ( size_t k=0; k<NZ; k++ ) {
 
-        // Calculate the position in the grid.
-        float x = kern.minXBox + i * DX;
-        float y = kern.minYBox + j * DY;
-        float z = kern.minZBox + k * DZ;
+          // Calculate the position in the grid.
+          float x = kern.minXBox + i * DX;
+          float y = kern.minYBox + j * DY;
+          float z = kern.minZBox + k * DZ;
 
-        // Extract the closest point from the complete kdtree.
-        kdres *set = kd_nearest3      ( kern.tree, x, y, z );
-        void  *ind = kd_res_item_data ( set );
-        int    pnt =                * ( int * ) ind;
-        kd_res_free                   ( set );
+          // Extract the closest point from the complete kdtree.
+          kdres *set = kd_nearest3      ( kern.tree, x, y, z );
+          void  *ind = kd_res_item_data ( set );
+          int    pnt =                * ( int * ) ind;
+          kd_res_free                   ( set );
 
-        // Store both the kernel and the coordinates.
-        int index = k + j * (NZ) + i * ((NZ) * (NY));
-        kern.regMeshArr[index] = kern.kernStore[pnt];
-        kern.regX      [index] = x;
-        kern.regY      [index] = y;
-        kern.regZ      [index] = z;
+          // Store both the kernel and the coordinates.
+          int index = k + j * (NZ) + i * ((NZ) * (NY));
+          kern.regMeshArr[index] = kern.kernStore[pnt];
+          kern.regX      [index] = x;
+          kern.regY      [index] = y;
+          kern.regZ      [index] = z;
 
+        }
       }
     }
+
+    iStartMPI += MPI::COMM_WORLD.Get_size();
+    iEndMPI    = iStartMPI + 1;
+
   }
 
   std::cout << "I'm done: " << MPI::COMM_WORLD.Get_rank() << ' ' << iStartMPI << ' ' << iEndMPI << std::flush << std::endl;
-  clock_t end = std::clock();
 
   MPI::COMM_WORLD.Barrier ();
+  clock_t end = std::clock();
   double elapsed_secs = double (end - begin) / CLOCKS_PER_SEC;
   if ( MPI::COMM_WORLD.Get_rank() == 0 )
     std::cout << "The interpolation took: " << elapsed_secs << " seconds." 

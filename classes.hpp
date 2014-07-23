@@ -50,13 +50,16 @@ public:
 
   // These are the functions.
   void readNetcdf          ( std::string mode, std::string fname );
-  void createKDtree        ( std::vector<Kernel> &allKern );
+  void createKDtree        ( );
   void mergeKernels        ( std::vector<Kernel> &allKern );
   void createRegMesh       ( std::vector<Kernel> &allKern );
-  void quickSort           ( int i1st, int i2nd );
+  void quickSortCenter     ( int i1st, int i2nd );
+  void quickSortPoint      ( int i1st, int i2nd, float px, float py, float pz );
   void getMinMaxCartesian  ( );
 
   float distFromCenter     ( float &x, float &y, float &z );
+  float distFromPoint      ( float &x,  float &y,  float &z, 
+                             float &px, float &py, float &pz );
 
   int  pivot               ( int   &i1st, int &i2nd,   
                              float &d1st, float &d2nd );
