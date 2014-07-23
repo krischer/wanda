@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <netcdf>
 #include "classes.hpp"
+#include "mpi.h"
 
 void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 {
@@ -44,7 +45,8 @@ void Kernel::createKDtree ( std::vector<Kernel> &allKern )
   for ( size_t chunk=0; chunk<allKern.size(); chunk++ ) 
   {
 
-    std::cout << "Creating KDtree for chunk " << chunk << "." << std::flush << std::endl;
+    if ( MPI::COMM_WORLD.Get_rank() == 0 )
+      std::cout << "Creating KDtree for chunk " << chunk << "." << std::flush << std::endl;
     for ( size_t i=0; i<allKern[chunk].numGLL; i++ )
     {
       KDdat[totIter] = totIter;
@@ -56,9 +58,8 @@ void Kernel::createKDtree ( std::vector<Kernel> &allKern )
       totIter++;
     }
 
-    /* After we've created the KDtree, we no longer need the
-     * inital coordinate arrays 
-     */
+    // After we've created the KDtree, we no longer need the
+    // inital coordinate arrays. 
     delete [] allKern[chunk].xExt;
     delete [] allKern[chunk].yExt;
     delete [] allKern[chunk].zExt;
@@ -85,12 +86,17 @@ void Kernel::mergeKernels ( std::vector<Kernel> &allKern )
     for ( size_t j=0; j<allKern[i].numGLL; j++ ) 
     {
       kernStore[totIter] = allKern[i].kernStore[j];
+      xExt[totIter]      = allKern[i].xExt[j];
+      yExt[totIter]      = allKern[i].yExt[j];
+      zExt[totIter]      = allKern[i].zExt[j];
       totIter++;
     }
 
-    /* Free memory associated with the original kernal storage
-     */
+    // Free memory associated with the original kernal storage 
     delete [] allKern[i].kernStore;
+    delete [] allKern[i].xExt;
+    delete [] allKern[i].yExt;
+    delete [] allKern[i].zExt;
   } 
 
 }
@@ -114,8 +120,16 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
       numGLL          = dim.getSize      ();
 
       kernStore = new float [numGLL];
-    
+   
+#if defined (withMPI)
+      if ( MPI::COMM_WORLD.Get_rank() == 0 )
+      {
+        gllValues.getVar (kernStore);
+      }
+      MPI::COMM_WORLD.Bcast ( kernStore, numGLL, MPI_FLOAT, 0 );
+#else
       gllValues.getVar (kernStore);
+#endif
 
     }
     else if ( mode == "coordinates" )
@@ -130,10 +144,21 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
       xExt = new float [numGLL];
       yExt = new float [numGLL];
       zExt = new float [numGLL];
-
-      dataX.getVar (xExt);
-      dataY.getVar (yExt);
-      dataZ.getVar (zExt);
+#if defined (withMPI)
+      if ( MPI::COMM_WORLD.Get_rank() == 0 )
+      {
+        dataX.getVar (xExt);
+        dataY.getVar (yExt);
+        dataZ.getVar (zExt);
+      }
+      MPI::COMM_WORLD.Bcast ( xExt, numGLL, MPI_FLOAT, 0 );
+      MPI::COMM_WORLD.Bcast ( yExt, numGLL, MPI_FLOAT, 0 );
+      MPI::COMM_WORLD.Bcast ( zExt, numGLL, MPI_FLOAT, 0 );
+#else
+        dataX.getVar (xExt);
+        dataY.getVar (yExt);
+        dataZ.getVar (zExt);
+#endif
 
     }
     

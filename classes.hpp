@@ -32,11 +32,13 @@ public:
   float maxZBox;
 
   // This is the internal regular mesh which we interpolate onto.
-  void *regMesh;
   float *regMeshArr;
+  float *regX;
+  float *regY;
+  float *regZ;
 
   // This array holds the data (indices) for the kdtree.
-  int *KDdat;
+  int    *KDdat;
   kdtree *tree;
 
   // This array holds the gll kernel values from one processor.
@@ -45,7 +47,6 @@ public:
 
   // These are the functions.
   void readNetcdf          ( std::string mode, std::string fname );
-  void interpolate         ( float &x, float &y, float &z );
   void createKDtree        ( std::vector<Kernel> &allKern );
   void mergeKernels        ( std::vector<Kernel> &allKern );
   void createRegMesh       ( std::vector<Kernel> &allKern );
