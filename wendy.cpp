@@ -3,6 +3,7 @@
 #include <math.h>
 #include "classes.hpp"
 #include "mpi.h"
+#include <exodusII.h>
 
 void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 {
@@ -80,7 +81,9 @@ void Kernel::mergeKernels ( std::vector<Kernel> &allKern )
     delete [] allKern[chunk].xExt;
     delete [] allKern[chunk].yExt;
     delete [] allKern[chunk].zExt;
-  } 
+  }
+
+  
 
 }
 
@@ -284,4 +287,75 @@ float Kernel::distFromCenter ( float &x, float &y, float &z )
   return dist;
 
 }
+
+
+void Kernel::writeExodus ( )
+{
+
+  int comp_ws = sizeof(float);
+  int io_ws   = 0;
+
+  int numNodes    = NX*NY*NZ;
+  int *nodeNumArr = new int [numNodes];
+
+  int idexo = ex_create        ( "./test.ex2", EX_CLOBBER, &comp_ws, &io_ws );
+  int ier   = ex_put_init      ( idexo, "Thing", 3, NX*NY*NZ, (NX-1)*(NY-1)*(NZ-1), 1, 0, 0 );
+      ier   = ex_put_var_param ( idexo, "n", 1 );
+      ier   = ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ); 
+
+  float *nodeCorZ = new float [numNodes];
+  float *nodeCorY = new float [numNodes];
+
+  float *nodeCorX = new float [numNodes];
+
+  int it = 0;
+  for ( int i=0; i<NX; i++ ) {
+    for ( int j=0; j<NY; j++ ) {
+      for ( int k=0; k<NZ; k++ ) {
+    
+        nodeNumArr[it] = it+1;
+        nodeCorZ[it] = (float)(k);
+        nodeCorY[it] = (float)(j);
+        nodeCorX[it] = (float)(i);
+        it++;
+
+      }
+    }
+  }
+
+  int numElem    = (NX-1)*(NY-1)*(NZ-1);
+  int *connect = new int [numElem*8];
+
+  int count=0;
+  for ( int i=0; i<NX-1; i++ ) {
+    for ( int j=0; j<NY-1; j++ ) {
+      for ( int k=0; k<NZ-1; k++ ) {
+
+        connect[count]   = nodeNumArr[k+(NZ)*(j+i*NY)];
+        connect[count+1] = nodeNumArr[k+(NZ)*(j+i*NY)+NZ];
+        connect[count+2] = nodeNumArr[k+(NZ)*(j+i*NY)+NY*NZ+NZ];
+        connect[count+3] = nodeNumArr[k+(NZ)*(j+i*NY)+NY*NZ];
+        connect[count+4] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)];
+        connect[count+5] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NZ];
+        connect[count+6] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NY*NZ+NZ];
+        connect[count+7] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NY*NZ];
+
+        count=count+8;
+
+      }
+    }
+  }
+
+  ex_put_coord ( idexo, nodeCorX, nodeCorY, nodeCorZ );
+  ex_put_elem_block ( idexo, 1, "HEX", numElem, 8, 0 );
+  ex_put_node_num_map ( idexo, nodeNumArr );
+  ex_put_elem_conn  ( idexo, 1, connect );
+  ex_close ( idexo );
+
+
+}
+  
+
+
+
 

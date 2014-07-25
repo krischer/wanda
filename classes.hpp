@@ -26,14 +26,6 @@ public:
   float centerY;
   float centerZ;
 
-  // These values hold the min/max for the entire regMesh.
-  float minXBox;
-  float maxXBox;
-  float minYBox;
-  float maxYBox;
-  float minZBox;
-  float maxZBox;
-
   // This is the internal regular mesh which we interpolate onto.
   float *regMeshArr;
   float *regX;
@@ -46,7 +38,10 @@ public:
 
   // This array holds the gll kernel values from one processor.
   float *kernStore;
-  int    numGLL = 0;
+  int    numGLL=0;
+  int    NX;
+  int    NY;
+  int    NZ;
 
   // These are the functions.
   void readNetcdf          ( std::string mode, std::string fname );
@@ -56,6 +51,7 @@ public:
   void quickSortCenter     ( int i1st, int i2nd );
   void quickSortPoint      ( int i1st, int i2nd, float px, float py, float pz );
   void getMinMaxCartesian  ( );
+  void writeExodus         ( );
 
   float distFromCenter     ( float &x, float &y, float &z );
   float distFromPoint      ( float &x,  float &y,  float &z, 
