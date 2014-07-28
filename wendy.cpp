@@ -298,14 +298,9 @@ void Kernel::writeExodus ( )
   int numNodes    = NX*NY*NZ;
   int *nodeNumArr = new int [numNodes];
 
-  int idexo = ex_create        ( "./test.ex2", EX_CLOBBER, &comp_ws, &io_ws );
-  int ier   = ex_put_init      ( idexo, "Thing", 3, NX*NY*NZ, (NX-1)*(NY-1)*(NZ-1), 1, 0, 0 );
-      ier   = ex_put_var_param ( idexo, "n", 1 );
-      ier   = ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ); 
 
   float *nodeCorZ = new float [numNodes];
   float *nodeCorY = new float [numNodes];
-
   float *nodeCorX = new float [numNodes];
 
   int it = 0;
@@ -314,9 +309,9 @@ void Kernel::writeExodus ( )
       for ( int k=0; k<NZ; k++ ) {
     
         nodeNumArr[it] = it+1;
-        nodeCorZ[it] = (float)(k);
-        nodeCorY[it] = (float)(j);
-        nodeCorX[it] = (float)(i);
+        nodeCorZ[it]   = regZ[k];
+        nodeCorY[it]   = regY[j];
+        nodeCorX[it]   = regX[i];
         it++;
 
       }
@@ -346,10 +341,15 @@ void Kernel::writeExodus ( )
     }
   }
 
+  int idexo = ex_create        ( "./test.ex2", EX_CLOBBER, &comp_ws, &io_ws );
+  int ier   = ex_put_init      ( idexo, "Thing", 3, NX*NY*NZ, (NX-1)*(NY-1)*(NZ-1), 1, 0, 0 );
   ex_put_coord ( idexo, nodeCorX, nodeCorY, nodeCorZ );
   ex_put_elem_block ( idexo, 1, "HEX", numElem, 8, 0 );
   ex_put_node_num_map ( idexo, nodeNumArr );
   ex_put_elem_conn  ( idexo, 1, connect );
+      ier   = ex_put_var_param ( idexo, "n", 1 );
+      ier   = ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ); 
+  
   ex_close ( idexo );
 
 

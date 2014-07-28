@@ -118,7 +118,7 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
   float DZ = 100.;
 
   // Determine # of grid points in each direction, given DX.
-  long NX = int ( ((kern.maxX - kern.minX) / DX) + 1);
+  long NX = int ( (((kern.maxX) - (kern.minX)) / DX) + 1);
   long NY = int ( ((kern.maxY - kern.minY) / DY) + 1);
   long NZ = int ( ((kern.maxZ - kern.minZ) / DZ) + 1);
 
@@ -130,9 +130,9 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
 
   // Allocate space for regular grid (initialized to 0).
   kern.regMeshArr = new float [gridSize]();
-  kern.regX       = new float [gridSize]();
-  kern.regY       = new float [gridSize]();
-  kern.regZ       = new float [gridSize]();
+  kern.regX       = new float [NX]();
+  kern.regY       = new float [NY]();
+  kern.regZ       = new float [NZ]();
 
   // Determine the parts of the mesh sent to each processor.
   float *sliceDistForward = new float [NX];
@@ -191,6 +191,10 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
           float y = kern.minY + j * DY;
           float z = kern.minZ + k * DZ;
 
+          if ( MPI::COMM_WORLD.Get_rank() == 1 )
+          std::cout << x << ' ' << y << ' ' << z << ' ' << k << std::endl;
+          //std::cin.get();
+
           // Extract the closest point from the complete kdtree.
           kdres *set = kd_nearest3      ( kern.tree, x, y, z );
           void  *ind = kd_res_item_data ( set );
@@ -200,9 +204,9 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
           // Store both the kernel and the coordinates.
           int index = k + j * (NZ) + i * ((NZ) * (NY));
           kern.regMeshArr[index] = kern.kernStore[pnt];
-          kern.regX      [index] = x;
-          kern.regY      [index] = y;
-          kern.regZ      [index] = z;
+          kern.regX      [i] = x;
+          kern.regY      [j] = y;
+          kern.regZ      [k] = z;
 
         }
       }
@@ -224,10 +228,14 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
 
   // Bring array back together.
   MPI::COMM_WORLD.Allreduce ( MPI_IN_PLACE, kern.regMeshArr, NX*NY*NZ, MPI_FLOAT, MPI_SUM );
-  MPI::COMM_WORLD.Allreduce ( MPI_IN_PLACE, kern.regX, NX*NY*NZ, MPI_FLOAT, MPI_SUM );
-  MPI::COMM_WORLD.Allreduce ( MPI_IN_PLACE, kern.regY, NX*NY*NZ, MPI_FLOAT, MPI_SUM );
-  MPI::COMM_WORLD.Allreduce ( MPI_IN_PLACE, kern.regZ, NX*NY*NZ, MPI_FLOAT, MPI_SUM );
+  MPI::COMM_WORLD.Allreduce ( MPI_IN_PLACE, kern.regX, NX, MPI_FLOAT, MPI_SUM );
 
+  if ( MPI::COMM_WORLD.Get_rank() == 0 )
+  {
+  std::cout << "after MPI " <<  kern.regX[0] << ' ' << kern.regY[0] << ' ' << kern.regZ[0] << std::endl;
+  std::cout << "after MPI " <<  kern.regX[1] << ' ' << kern.regY[1] << ' ' << kern.regZ[1] << std::endl;
+  std::cout << "after MPI " <<  kern.regX[2] << ' ' << kern.regY[2] << ' ' << kern.regZ[2] << std::endl;
+  }
   kern.NX = NX;
   kern.NY = NY;
   kern.NZ = NZ;
