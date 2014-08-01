@@ -22,6 +22,12 @@ public:
   float maxX;
   float maxY;
   float maxZ;
+  float minC;
+  float maxC;
+  float minL;
+  float maxL;
+  float minR;
+  float maxR;
   float centerX;
   float centerY;
   float centerZ;
@@ -52,6 +58,11 @@ public:
   void quickSortPoint      ( int i1st, int i2nd, float px, float py, float pz );
   void getMinMaxCartesian  ( );
   void writeExodus         ( );
+  void rotateXaxis         ( double &deg );
+  void rotateYaxis         ( double &deg );
+  void rotateZaxis         ( double &deg );
+  double angleFromAxis      ( char axis );
+
 
   float distFromCenter     ( float &x, float &y, float &z );
   float distFromPoint      ( float &x,  float &y,  float &z, 
@@ -62,3 +73,4 @@ public:
 };
 
 void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern );
+void exodusErrorCheck ( int ier, std::string function );

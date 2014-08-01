@@ -1,6 +1,6 @@
 #include <cstdlib>
 #include <netcdf>
-#include <math.h>
+#include <cmath>
 #include "classes.hpp"
 #include "mpi.h"
 #include <exodusII.h>
@@ -23,6 +23,92 @@ void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 
       }
     }
+  }
+
+}
+
+void Kernel::rotateXaxis ( double &deg )
+{
+
+  double rad = deg * M_PI / 180.0;
+
+  double rx11 = 1;
+  double rx12 = 0;
+  double rx13 = 0;
+  double rx21 = 0;
+  double rx22 = cos (rad);
+  double rx23 = sin (rad) * (-1);
+  double rx31 = 0;
+  double rx32 = sin (rad);
+  double rx33 = cos (rad);
+
+  for ( size_t i=0; i<numGLL; i++ )
+  {
+    double xNew = rx11 * xExt[i] + rx12 * yExt[i] + rx13 * zExt[i];
+    double yNew = rx21 * xExt[i] + rx22 * yExt[i] + rx23 * zExt[i];
+    double zNew = rx31 * xExt[i] + rx32 * yExt[i] + rx33 * zExt[i];
+
+    xExt[i] = xNew;
+    yExt[i] = yNew;
+    zExt[i] = zNew;
+  }
+
+}
+
+void Kernel::rotateYaxis ( double &deg )
+{
+
+  double rad = deg * M_PI / 180.0;
+
+  double ry11 = cos (rad);
+  double ry12 = 0;
+  double ry13 = sin (rad);
+  double ry21 = 0;
+  double ry22 = 1;
+  double ry23 = 0;
+  double ry31 = sin (rad) * (-1);
+  double ry32 = 0;
+  double ry33 = cos (rad);
+
+  for ( size_t i=0; i<numGLL; i++ )
+  {
+    double xNew = ry11 * xExt[i] + ry12 * yExt[i] + ry13 * zExt[i];
+    double yNew = ry21 * xExt[i] + ry22 * yExt[i] + ry23 * zExt[i];
+    double zNew = ry31 * xExt[i] + ry32 * yExt[i] + ry33 * zExt[i];
+
+
+    xExt[i] = xNew;
+    yExt[i] = yNew;
+    zExt[i] = zNew;
+  }
+
+}
+
+void Kernel::rotateZaxis ( double &deg )
+{
+
+  double rad = deg * M_PI / 180.0;
+
+  double  rz11 = cos (rad);
+  double  rz12 = sin (rad) * (-1);
+  double  rz13 = 0;
+  double  rz21 = sin (rad);
+  double  rz22 = cos (rad);
+  double  rz23 = 0;
+  double  rz31 = 0;
+  double  rz32 = 0;
+  double  rz33 = 1;
+
+  for ( size_t i=0; i<numGLL; i++ )
+  {
+
+    double xNew = rz11 * xExt[i] + rz12 * yExt[i] + rz13 * zExt[i];
+    double yNew = rz21 * xExt[i] + rz22 * yExt[i] + rz23 * zExt[i];
+    double zNew = rz31 * xExt[i] + rz32 * yExt[i] + rz33 * zExt[i];
+
+    xExt[i] = xNew;
+    yExt[i] = yNew;
+    zExt[i] = zNew;
   }
 
 }
@@ -160,6 +246,46 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
 
 }
 
+double Kernel::angleFromAxis ( char axis )
+{
+
+  double v1 = 0;
+  double v2 = 0;
+  double v3 = 0;
+
+  if ( axis == 'x' )
+  {
+    v1 = 1;
+    v2 = 0;
+    v3 = 0;
+  }
+
+  if ( axis == 'y' )
+  {
+    v1 = 0;
+    v2 = 1;
+    v3 = 0;
+  }
+
+  if ( axis == 'z' )
+  {
+    v1 = 0;
+    v2 = 0;
+    v3 = 1;
+  }
+
+  double uDotv = centerX * v1 + centerY * v2 + centerZ * v3;
+  double magU  = sqrt ( centerX * centerX + centerY * centerY + centerZ * centerZ );
+  double div   = uDotv / magU;
+  double angle = acos (div) * 180.0 / M_PI;
+
+  return angle;
+
+}
+
+
+
+
 void Kernel::getMinMaxCartesian ()
 {
 
@@ -169,8 +295,33 @@ void Kernel::getMinMaxCartesian ()
   maxY = yExt[0];
   minZ = zExt[0];
   maxZ = zExt[0];
+  minC = 180;
+  maxC = 0;
+  minL = 180;
+  maxL = -180;
+  minR = 6371;
+  maxR = 0;
   for ( int i=0; i<numGLL; i++ )
   {
+
+    float rad = sqrt  ( xExt[i] * xExt[i] + yExt[i] * yExt[i] + zExt[i] * zExt[i] );
+    float lon = atan2 ( yExt[i] , xExt[i] );
+    float col = acos  ( zExt[i] / rad );
+
+    if ( rad < minR )
+      minR = rad;
+    if ( rad > maxR )
+      maxR = rad;
+
+    if ( lon < minL )
+      minL = lon;
+    if ( lon > maxL )
+      maxL = lon;
+
+    if ( col < minC )
+      minC = col;
+    if ( col > maxC )
+      maxC = col;
     
     if ( xExt[i] < minX )
       minX = xExt[i];
@@ -298,7 +449,6 @@ void Kernel::writeExodus ( )
   int numNodes    = NX*NY*NZ;
   int *nodeNumArr = new int [numNodes];
 
-
   float *nodeCorZ = new float [numNodes];
   float *nodeCorY = new float [numNodes];
   float *nodeCorX = new float [numNodes];
@@ -334,24 +484,43 @@ void Kernel::writeExodus ( )
         connect[count+5] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NZ];
         connect[count+6] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NY*NZ+NZ];
         connect[count+7] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NY*NZ];
-
         count=count+8;
 
       }
     }
   }
 
+  std::cout << "Writing exodus file." << std::flush << std::endl;
   int idexo = ex_create        ( "./test.ex2", EX_CLOBBER, &comp_ws, &io_ws );
-  int ier   = ex_put_init      ( idexo, "Thing", 3, NX*NY*NZ, (NX-1)*(NY-1)*(NZ-1), 1, 0, 0 );
-  ex_put_coord ( idexo, nodeCorX, nodeCorY, nodeCorZ );
-  ex_put_elem_block ( idexo, 1, "HEX", numElem, 8, 0 );
-  ex_put_node_num_map ( idexo, nodeNumArr );
-  ex_put_elem_conn  ( idexo, 1, connect );
-      ier   = ex_put_var_param ( idexo, "n", 1 );
-      ier   = ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ); 
+  exodusErrorCheck ( ex_put_init( idexo, "Thing", 3, NX*NY*NZ, (NX-1)*(NY-1)*(NZ-1), 1, 0, 0 ),
+      "ex_put_init" );
+  exodusErrorCheck ( ex_put_coord ( idexo, nodeCorX, nodeCorY, nodeCorZ ), "ex_put_coord" );
+  exodusErrorCheck ( ex_put_elem_block ( idexo, 1, "HEX", numElem, 8, 0 ), "ex_put_elem_block" );
+  exodusErrorCheck ( ex_put_node_num_map ( idexo, nodeNumArr ), "ex_put_node_num_map" );
+  exodusErrorCheck ( ex_put_elem_conn  ( idexo, 1, connect ), "ex_put_elem_conn" );
+  exodusErrorCheck ( ex_put_var_param ( idexo, "n", 1 ), "ex_put_var_param" );
+  exodusErrorCheck ( ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ), 
+      "ex_put_nodal_var" ); 
   
-  ex_close ( idexo );
+  exodusErrorCheck ( ex_close ( idexo ), "ex_close" );
 
+  std::cout << "Done writing exodus file." << std::flush << std::endl;
+
+
+}
+
+void exodusErrorCheck ( int ier, std::string function )
+{
+
+  if ( ier != 0 )
+  {
+    std::cout << "ERROR in " << function << std::flush << std::endl;
+    exit (EXIT_FAILURE);
+  }
+  else
+  {
+    std::cout << function << " completed successfully." << std::endl;
+  }
 
 }
   
