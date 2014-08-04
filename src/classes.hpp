@@ -44,6 +44,7 @@ public:
 
   // This array holds the gll kernel values from one processor.
   float *kernStore;
+  float *smoothArr;
   int    numGLL=0;
   int    NX;
   int    NY;
@@ -64,6 +65,7 @@ public:
   double angleFromAxis      ( char axis );
 
 
+  void smoothGaussian      ( float &var );
   float distFromCenter     ( float &x, float &y, float &z );
   float distFromPoint      ( float &x,  float &y,  float &z, 
                              float &px, float &py, float &pz );

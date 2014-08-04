@@ -27,6 +27,47 @@ void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 
 }
 
+void Kernel::smoothGaussian ( float &var )
+{
+
+  smoothArr = new float [NX*NY*NZ]();
+
+  float normDenom = var*var*var * sqrt (2*M_PI*2*M_PI*2*M_PI);
+  float norm      = 1. / normDenom;
+
+  for ( size_t iSmooth=0; iSmooth<NX; iSmooth++ ) {
+    for ( size_t jSmooth=0; jSmooth<NY; jSmooth++ ) {
+      for ( size_t kSmooth=0; kSmooth<NZ; kSmooth++ ) {
+
+        for ( size_t i=0; i<NX; i++ ) {
+          for ( size_t j=0; j<NY; j++ ) {
+            for ( size_t k=0; k<NZ; k++ ) {
+
+              // Calculate the indices for the smoothed, and source, mesh.
+              int iSmooth = kSmooth + NZ * (jSmooth + iSmooth * NY); 
+              int i       = k + NZ * (j + i * NY);
+              
+              // Get the distance from arbitrary grid point to 
+              // source smoothing point.
+              float xDist = regX[i] - regX[iSmooth]; 
+              float yDist = regY[j] - regY[jSmooth]; 
+              float zDist = regZ[k] - regZ[kSmooth]; 
+
+              float shape = ( (-1) * (xDist*xDist + yDist*yDist + zDist*zDist ) ) / (var*var);
+
+              std::cout << iSmooth << std::flush << std::endl;
+              if ( iSmooth == 40 )
+              smoothArr[iSmooth] = shape;
+
+            }
+          }
+        }
+      }
+    }
+  }
+
+}
+
 void Kernel::rotateXaxis ( double &deg )
 {
 
@@ -512,7 +553,7 @@ void Kernel::writeExodus ( )
   exodusErrorCheck ( ex_put_elem_conn  ( idexo, 1, connect ), "ex_put_elem_conn" );
   exodusErrorCheck ( ex_put_var_param ( idexo, "n", nVars ), "ex_put_var_param" );
   exodusErrorCheck ( ex_put_var_names ( idexo, "n", nVars, varNames ), "ex_put_var_names" );
-  exodusErrorCheck ( ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ), "ex_put_nodal_var" ); 
+  exodusErrorCheck ( ex_put_nodal_var ( idexo, 1, 1, numNodes, smoothArr ), "ex_put_nodal_var" ); 
   exodusErrorCheck ( ex_close ( idexo ), "ex_close" );
 
 }

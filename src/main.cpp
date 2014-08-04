@@ -101,6 +101,11 @@ int main ()
   // Go ahead and create the regular mesh.
   createRegMesh     ( kern, allKern );
 
+  float smoothLength = 100;
+
+  if ( rank == 0 )
+  kern.smoothGaussian ( smoothLength );
+
   // Write a nice exodus file.
   if ( rank == 0 )
     kern.writeExodus ( );
@@ -117,7 +122,7 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
   // Grid discretization. Make this a parameter.
   float DX = 50.;
   float DY = 50.;
-  float DZ = 50.;
+  float DZ = 10.;
 
 
   // Determine # of grid points in each direction, given DX.
@@ -165,7 +170,8 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
     }
   }
 
-  // MPI end condition.
+  // MPI end condition. The if statement handles cases where there is more
+  // processes than X values.
   bool loop = true;
   if ( iStartMPI == 0 && iEndMPI == 0 )
     loop = false;
