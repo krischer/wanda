@@ -1,11 +1,13 @@
+#include "classes.hpp"
+#include "mpi.h"
+
 #include <cstdlib>
 #include <netcdf>
 #include <cmath>
-#include "classes.hpp"
-#include "mpi.h"
 #include <exodusII.h>
 
 void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
+
 {
 
   Kernel kern;
@@ -30,42 +32,113 @@ void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 void Kernel::smoothGaussian ( float &var )
 {
 
+  // Get rank for MPI looping purposes.
+  int rank = MPI::COMM_WORLD.Get_rank();
+
+  // Array which will hold smoothed image. Initialize to zero.
   smoothArr = new float [NX*NY*NZ]();
 
+  // Constants for the gaussian.
+  float varSquare = var*var;
   float normDenom = var*var*var * sqrt (2*M_PI*2*M_PI*2*M_PI);
   float norm      = 1. / normDenom;
 
-  for ( size_t iSmooth=0; iSmooth<NX; iSmooth++ ) {
-    for ( size_t jSmooth=0; jSmooth<NY; jSmooth++ ) {
-      for ( size_t kSmooth=0; kSmooth<NZ; kSmooth++ ) {
+  // Assign initial ranks.
+  size_t iStartMPI = rank;
+  size_t iEndMPI   = rank+1;
 
-        for ( size_t i=0; i<NX; i++ ) {
-          for ( size_t j=0; j<NY; j++ ) {
-            for ( size_t k=0; k<NZ; k++ ) {
+  bool loop = true;
+  if ( iEndMPI > NX )
+    loop = false;
 
-              // Calculate the indices for the smoothed, and source, mesh.
-              int iSmooth = kSmooth + NZ * (jSmooth + iSmooth * NY); 
-              int i       = k + NZ * (j + i * NY);
-              
-              // Get the distance from arbitrary grid point to 
-              // source smoothing point.
-              float xDist = regX[i] - regX[iSmooth]; 
-              float yDist = regY[j] - regY[jSmooth]; 
-              float zDist = regZ[k] - regZ[kSmooth]; 
+  clock_t begin = std::clock();
 
-              float shape = ( (-1) * (xDist*xDist + yDist*yDist + zDist*zDist ) ) / (var*var);
+  if ( rank == 0 )
+    std::cout << "Launching gaussian smoother." << std::flush << std::endl;
+  while ( loop == true )
+  {
+    for ( size_t iSmooth=iStartMPI; iSmooth<iEndMPI; iSmooth++ ) {
+      for ( size_t jSmooth=0; jSmooth<NY; jSmooth++ ) {
+        for ( size_t kSmooth=0; kSmooth<NZ; kSmooth++ ) {
 
-              std::cout << iSmooth << std::flush << std::endl;
-              if ( iSmooth == 40 )
-              smoothArr[iSmooth] = shape;
+          int indSmooth  = kSmooth + NZ * (jSmooth + iSmooth * NY);
+          float iSmoothX = regX[iSmooth];
+          float iSmoothY = regY[jSmooth];
+          float iSmoothZ = regZ[kSmooth];
+//
+//          // Use these to determine if we're in the pad box or not.
+//          float rad = sqrt  ( iSmoothX*iSmoothX + iSmoothY*iSmoothY 
+//              + iSmoothZ*iSmoothZ );
+//          float lon = atan2 ( iSmoothY, iSmoothX );
+//          float col = acos  ( iSmoothZ / rad );
+//
+//          // Assume we're outside the box, and test
+//          bool inRad = false;
+//          bool inLon = false;
+//          bool inCol = false;
+//
+//          if ( (rad < maxR) && (rad > minR) )
+//            inRad = true;
+//          if ( (lon < maxL) && (lon > minL) )
+//            inLon = true;
+//          if ( (col < maxC) && (col > minC) )
+//            inCol = true;
+//
+//          if ( inRad == false || inLon == false || inCol == false )
+//          {
+//            smoothArr[iSmooth] = 0.0;
+//            continue;
+//          }
+          
+          float normSum = 0.;
+          for ( size_t i=0; i<NX; i++ ) {
+            for ( size_t j=0; j<NY; j++ ) {
+              for ( size_t k=0; k<NZ; k++ ) {
 
+                // Calculate the indices for the smoothed, and source, mesh.
+                int ind = k + NZ * (j + i * NY);
+                
+                // Get the distance from arbitrary grid point to 
+                // source smoothing point.
+                float xDist = regX[i] - iSmoothX; 
+                float yDist = regY[j] - iSmoothY; 
+                float zDist = regZ[k] - iSmoothZ;
+
+                // If we're within 5 sigma, smooth.
+                float magnitude = xDist*xDist + yDist*yDist + zDist*zDist;
+                if ( sqrt ( magnitude ) <= 5 * var )
+                {
+                  float shape          = (-1) * (magnitude) / (varSquare);
+                  normSum             += kernStore[ind];
+//                  smoothArr[indSmooth] = exp (shape) * kernStore[ind] 
+//                    + smoothArr[indSmooth];
+                  smoothArr[indSmooth] = exp (shape);
+                }
+                else
+                {
+                  smoothArr[indSmooth] = 0.;
+                }
+              }
             }
           }
+
+//          smoothArr[indSmooth] = (1/normSum) * smoothArr[indSmooth];
         }
       }
     }
+    rank += MPI::COMM_WORLD.Get_size();
+    if ( rank >= NX )
+      loop = false;
   }
 
+  MPI::COMM_WORLD.Barrier ();
+  clock_t end = std::clock();
+  double elapsed_secs = double (end - begin) / CLOCKS_PER_SEC;
+  if ( MPI::COMM_WORLD.Get_rank() == 0 )
+    std::cout << "The smoothing took: " << elapsed_secs
+      << " seconds." << std::flush << std::endl;
+
+  MPI::COMM_WORLD.Allreduce ( MPI_IN_PLACE, smoothArr, NX*NY*NZ, MPI_FLOAT, MPI_SUM );
 }
 
 void Kernel::rotateXaxis ( double &deg )

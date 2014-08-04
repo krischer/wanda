@@ -46,6 +46,7 @@ int main ()
   MPI::COMM_WORLD.Bcast ( nProcBuf, 1, MPI_INT, 0 );
   allKern.reserve (*nProcBuf);
 #endif
+
   // Loop over input netcdf files.
   for ( int i=0; i<*nProcBuf; i++ )
   {
@@ -103,7 +104,6 @@ int main ()
 
   float smoothLength = 100;
 
-  if ( rank == 0 )
   kern.smoothGaussian ( smoothLength );
 
   // Write a nice exodus file.
@@ -122,8 +122,11 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
   // Grid discretization. Make this a parameter.
   float DX = 50.;
   float DY = 50.;
-  float DZ = 10.;
+  float DZ = 50.;
 
+  kern.DX = DX;
+  kern.DY = DY;
+  kern.DZ = DZ;
 
   // Determine # of grid points in each direction, given DX.
   long NX = int ( (((kern.maxX+DX) - kern.minX) / DX) + 1);

@@ -1,6 +1,8 @@
+#include "kdtree.h"
+
 #include <iostream>
 #include <vector>
-#include "kdtree.h"
+#include <ctime>
 
 class Kernel;
 
@@ -31,6 +33,9 @@ public:
   float centerX;
   float centerY;
   float centerZ;
+  float DX;
+  float DY;
+  float DZ;
 
   // This is the internal regular mesh which we interpolate onto.
   float *regMeshArr;
