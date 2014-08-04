@@ -54,9 +54,9 @@ int main ()
     Kernel kern;
 
     // Directory basenames (make parameter).
-    std::string fNameBase   = "./testKernels/proc";
+    std::string fNameBase   = "./inputGrids/kernels/proc";
     std::string fNameApp    = "_reg1_betav_kernel.nc";
-    std::string xyzNameBase = "./cemRequest/xyz_reg01_proc";
+    std::string xyzNameBase = "./inputGrids/gridFiles/xyz_reg01_proc";
 
     // Get proc num name for kernel.
     std::stringstream ssPrc;
@@ -93,7 +93,6 @@ int main ()
   // Quicksort by distance from center.
   if ( rank == 0 )
     std::cout << "Sorting." << std::flush << std::endl;
-  
   kern.quickSortCenter ( 0, kern.numGLL-1 );
 
   // Create a single kdtree from the baby kernels.
@@ -102,9 +101,11 @@ int main ()
   // Go ahead and create the regular mesh.
   createRegMesh     ( kern, allKern );
 
+  // Write a nice exodus file.
   if ( rank == 0 )
     kern.writeExodus ( );
 
+  // Go home.
   MPI::Finalize();
   return 0;
 
@@ -164,6 +165,7 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
     }
   }
 
+  // MPI end condition.
   bool loop = true;
   if ( iStartMPI == 0 && iEndMPI == 0 )
     loop = false;

@@ -443,16 +443,27 @@ float Kernel::distFromCenter ( float &x, float &y, float &z )
 void Kernel::writeExodus ( )
 {
 
-  int comp_ws = sizeof(float);
-  int io_ws   = 0;
+  // Exodus parameters.
+  int  comp_ws      = sizeof(float);
+  int  io_ws        = 0;
+  int  nVars        = 1;
+  int  nDim         = 3;
+  int  nBlock       = 1;
+  int  nNodeSet     = 0;
+  int  nSideSet     = 0;
+  int  nNodePerElem = 8;
+  int  numNodes     = NX*NY*NZ;
+  int  numElem      = (NX-1)*(NY-1)*(NZ-1);
 
-  int numNodes    = NX*NY*NZ;
+  char *varNames[1];
+  varNames[0] = "Sensitivity";
+  
   int *nodeNumArr = new int [numNodes];
-
   float *nodeCorZ = new float [numNodes];
   float *nodeCorY = new float [numNodes];
   float *nodeCorX = new float [numNodes];
 
+  // Unpack coordinate arrays.
   int it = 0;
   for ( int i=0; i<NX; i++ ) {
     for ( int j=0; j<NY; j++ ) {
@@ -468,9 +479,9 @@ void Kernel::writeExodus ( )
     }
   }
 
-  int numElem    = (NX-1)*(NY-1)*(NZ-1);
-  int *connect = new int [numElem*8];
+  int *connect = new int [numElem*nNodePerElem];
 
+  // Construct connectivity array.
   int count=0;
   for ( int i=0; i<NX-1; i++ ) {
     for ( int j=0; j<NY-1; j++ ) {
@@ -490,22 +501,19 @@ void Kernel::writeExodus ( )
     }
   }
 
+
   std::cout << "Writing exodus file." << std::flush << std::endl;
-  int idexo = ex_create        ( "./test.ex2", EX_CLOBBER, &comp_ws, &io_ws );
-  exodusErrorCheck ( ex_put_init( idexo, "Thing", 3, NX*NY*NZ, (NX-1)*(NY-1)*(NZ-1), 1, 0, 0 ),
-      "ex_put_init" );
+  int idexo = ex_create ( "./test.ex2", EX_CLOBBER, &comp_ws, &io_ws );
+
+  exodusErrorCheck ( ex_put_init( idexo, "Kernel", nDim, numNodes, numElem, nBlock, nNodeSet, nSideSet ), "ex_put_init" );
   exodusErrorCheck ( ex_put_coord ( idexo, nodeCorX, nodeCorY, nodeCorZ ), "ex_put_coord" );
-  exodusErrorCheck ( ex_put_elem_block ( idexo, 1, "HEX", numElem, 8, 0 ), "ex_put_elem_block" );
+  exodusErrorCheck ( ex_put_elem_block ( idexo, 1, "HEX", numElem, nNodePerElem, 0 ), "ex_put_elem_block" );
   exodusErrorCheck ( ex_put_node_num_map ( idexo, nodeNumArr ), "ex_put_node_num_map" );
   exodusErrorCheck ( ex_put_elem_conn  ( idexo, 1, connect ), "ex_put_elem_conn" );
-  exodusErrorCheck ( ex_put_var_param ( idexo, "n", 1 ), "ex_put_var_param" );
-  exodusErrorCheck ( ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ), 
-      "ex_put_nodal_var" ); 
-  
+  exodusErrorCheck ( ex_put_var_param ( idexo, "n", nVars ), "ex_put_var_param" );
+  exodusErrorCheck ( ex_put_var_names ( idexo, "n", nVars, varNames ), "ex_put_var_names" );
+  exodusErrorCheck ( ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ), "ex_put_nodal_var" ); 
   exodusErrorCheck ( ex_close ( idexo ), "ex_close" );
-
-  std::cout << "Done writing exodus file." << std::flush << std::endl;
-
 
 }
 
@@ -517,14 +525,5 @@ void exodusErrorCheck ( int ier, std::string function )
     std::cout << "ERROR in " << function << std::flush << std::endl;
     exit (EXIT_FAILURE);
   }
-  else
-  {
-    std::cout << function << " completed successfully." << std::endl;
-  }
 
 }
-  
-
-
-
-

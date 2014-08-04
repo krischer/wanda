@@ -13,16 +13,25 @@ CFLAGS   = -O3
 LDFLAGS = -L$(EXODUS_LIB) -lexodus -L$(NETCDF_LIB) -lnetcdf_c++4 -lnetcdf -L$(HDF5_LIB) -lhdf5_hl -lhdf5 -lz
 
 OBJS_GENERIC     = \
-	./main.o \
-	./wendy.o \
-	./kdtree.o
+	./src/main.o \
+	./src/wendy.o \
+	./src/kdtree.o
 								 
+./src/%.o: ./src/%.c
+	@$(CC) 						$(CFLAGS) -c -o $@ $<
+	@echo "CC  $<"
+
+./src/%.o: ./src/%.cpp
+	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+	@echo "CXX $<"
+
 ###################
 all: main
 
 main: $(OBJS_GENERIC)
-	$(CXX) $(LDFLAGS) -o testWendy $(OBJS_GENERIC) $(LDFLAGS)
+	@$(CXX) $(LDFLAGS) -o testWendy $(OBJS_GENERIC) $(LDFLAGS)
+	@echo "Linking ... $<"
 	
 ###################	
 clean:
-	$(RM) *.o
+	$(RM) ./src/*.o ./testWendy
