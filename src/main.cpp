@@ -88,6 +88,14 @@ int main ()
   // Merge the kernel data as well.
   kern.mergeKernels ( allKern );
 
+  // Rotate around Z axis to the X.
+  double angle1 = -25;
+  kern.rotateZaxis ( angle1 );
+
+  // Rotate around Y axis to Z.
+  double angle2 = -50; 
+  kern.rotateYaxis ( angle2 );
+  
   // Find min/max box of full kernel.
   kern.getMinMaxCartesian ();
 
@@ -102,8 +110,9 @@ int main ()
   // Go ahead and create the regular mesh.
   createRegMesh     ( kern, allKern );
 
-  float smoothLength = 100;
+  kern.getMinMaxCartesian ();
 
+  float smoothLength = 50;
   kern.smoothGaussian ( smoothLength );
 
   // Write a nice exodus file.
@@ -120,9 +129,9 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
 {
 
   // Grid discretization. Make this a parameter.
-  float DX = 50.;
-  float DY = 50.;
-  float DZ = 50.;
+  float DX = 10.;
+  float DY = 10.;
+  float DZ = 10.;
 
   kern.DX = DX;
   kern.DY = DY;
@@ -259,10 +268,11 @@ void createRegMesh ( Kernel &kern, std::vector<Kernel> &allKern )
 
   }
 
+
   // Barrier here for timer.
   MPI::COMM_WORLD.Barrier ();
   clock_t end = std::clock();
-  double elapsed_secs = double (end - begin) / CLOCKS_PER_SEC;
+  double elapsed_secs = double (end- begin) / CLOCKS_PER_SEC;
   if ( MPI::COMM_WORLD.Get_rank() == 0 ) 
   {
      std::cout << "The interpolation took: " << elapsed_secs 

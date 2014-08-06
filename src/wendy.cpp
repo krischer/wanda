@@ -32,16 +32,19 @@ void returnRegularArray ( int NUM_X, int NUM_Y, int NUM_Z, void *testArr )
 void Kernel::smoothGaussian ( float &var )
 {
 
+  // Gaussian constants.
+  float denom     = pow ( sqrt (2*M_PI), 3 );// * pow ( var, 3 );
+  float norm      = sqrt (var) / denom;
+  float varSquare = var*var;
+
   // Get rank for MPI looping purposes.
   int rank = MPI::COMM_WORLD.Get_rank();
 
   // Array which will hold smoothed image. Initialize to zero.
   smoothArr = new float [NX*NY*NZ]();
 
-  // Constants for the gaussian.
-  float varSquare = var*var;
-  float normDenom = var*var*var * sqrt (2*M_PI*2*M_PI*2*M_PI);
-  float norm      = 1. / normDenom;
+  // Scratch gaussian array. Initialize to zero.
+  float *gaussArr = new float [NX*NY*NZ]();
 
   // Assign initial ranks.
   size_t iStartMPI = rank;
@@ -55,6 +58,7 @@ void Kernel::smoothGaussian ( float &var )
 
   if ( rank == 0 )
     std::cout << "Launching gaussian smoother." << std::flush << std::endl;
+
   while ( loop == true )
   {
     for ( size_t iSmooth=iStartMPI; iSmooth<iEndMPI; iSmooth++ ) {
@@ -65,38 +69,13 @@ void Kernel::smoothGaussian ( float &var )
           float iSmoothX = regX[iSmooth];
           float iSmoothY = regY[jSmooth];
           float iSmoothZ = regZ[kSmooth];
-//
-//          // Use these to determine if we're in the pad box or not.
-//          float rad = sqrt  ( iSmoothX*iSmoothX + iSmoothY*iSmoothY 
-//              + iSmoothZ*iSmoothZ );
-//          float lon = atan2 ( iSmoothY, iSmoothX );
-//          float col = acos  ( iSmoothZ / rad );
-//
-//          // Assume we're outside the box, and test
-//          bool inRad = false;
-//          bool inLon = false;
-//          bool inCol = false;
-//
-//          if ( (rad < maxR) && (rad > minR) )
-//            inRad = true;
-//          if ( (lon < maxL) && (lon > minL) )
-//            inLon = true;
-//          if ( (col < maxC) && (col > minC) )
-//            inCol = true;
-//
-//          if ( inRad == false || inLon == false || inCol == false )
-//          {
-//            smoothArr[iSmooth] = 0.0;
-//            continue;
-//          }
-          
-          float normSum = 0.;
+          float fullSum  = 0.;
           for ( size_t i=0; i<NX; i++ ) {
             for ( size_t j=0; j<NY; j++ ) {
               for ( size_t k=0; k<NZ; k++ ) {
 
                 // Calculate the indices for the smoothed, and source, mesh.
-                int ind = k + NZ * (j + i * NY);
+                int ind = k + j * (NZ) + i * ((NZ) * (NY));
                 
                 // Get the distance from arbitrary grid point to 
                 // source smoothing point.
@@ -105,32 +84,45 @@ void Kernel::smoothGaussian ( float &var )
                 float zDist = regZ[k] - iSmoothZ;
 
                 // If we're within 5 sigma, smooth.
+                gaussArr[ind] = 0.;
                 float magnitude = xDist*xDist + yDist*yDist + zDist*zDist;
-                if ( sqrt ( magnitude ) <= 5 * var )
-                {
-                  float shape          = (-1) * (magnitude) / (varSquare);
-                  normSum             += kernStore[ind];
-//                  smoothArr[indSmooth] = exp (shape) * kernStore[ind] 
-//                    + smoothArr[indSmooth];
-                  smoothArr[indSmooth] = exp (shape);
+                if ( sqrt (magnitude) <= (3 * var) ) {
+
+                  float shape   = (-1) * (magnitude) / (2 * varSquare);
+
+                  gaussArr[ind] = exp (shape);
+                  fullSum      += gaussArr[ind];
+
                 }
-                else
-                {
-                  smoothArr[indSmooth] = 0.;
-                }
+
               }
             }
           }
 
-//          smoothArr[indSmooth] = (1/normSum) * smoothArr[indSmooth];
+          for ( size_t i=0; i<NX; i++ ) {
+            for ( size_t j=0; j<NY; j++ ) {
+              for ( size_t k=0; k<NZ; k++ ) {
+
+                int ind               = k + j * (NZ) + i * ((NZ) * (NY));
+                smoothArr[indSmooth] += gaussArr[ind] * regMeshArr[ind] / fullSum;
+
+              }
+            }
+          }
         }
       }
     }
-    rank += MPI::COMM_WORLD.Get_size();
-    if ( rank >= NX )
+
+    iStartMPI += MPI::COMM_WORLD.Get_size();
+    iEndMPI    = iStartMPI + 1;
+    if ( iEndMPI > NX )
       loop = false;
   }
 
+  // Free scratch gaussian array.
+  delete [] gaussArr;
+
+  // Bring all together.
   MPI::COMM_WORLD.Barrier ();
   clock_t end = std::clock();
   double elapsed_secs = double (end - begin) / CLOCKS_PER_SEC;
@@ -139,6 +131,7 @@ void Kernel::smoothGaussian ( float &var )
       << " seconds." << std::flush << std::endl;
 
   MPI::COMM_WORLD.Allreduce ( MPI_IN_PLACE, smoothArr, NX*NY*NZ, MPI_FLOAT, MPI_SUM );
+
 }
 
 void Kernel::rotateXaxis ( double &deg )
@@ -341,9 +334,9 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
       MPI::COMM_WORLD.Bcast ( yExt, numGLL, MPI_FLOAT, 0 );
       MPI::COMM_WORLD.Bcast ( zExt, numGLL, MPI_FLOAT, 0 );
 #else
-        dataX.getVar (xExt);
-        dataY.getVar (yExt);
-        dataZ.getVar (zExt);
+      dataX.getVar (xExt);
+      dataY.getVar (yExt);
+      dataZ.getVar (zExt);
 #endif
 
     }
@@ -357,6 +350,74 @@ void Kernel::readNetcdf ( std::string mode, std::string fname )
     std::exit ( EXIT_FAILURE );
 
   }
+
+}
+
+void Kernel::crossProductZ ( )
+{
+
+  rotVec.reserve (3);
+
+  float x1 = centerX;
+  float y1 = centerY;
+  float z1 = centerZ;
+  float x2 = 0;
+  float y2 = 0;
+  float z2 = 1;
+
+  rotVec[0] = y1 * z2 - z1 * y2;
+  rotVec[1] = z1 * x2 - x1 * z2;
+  rotVec[2] = x1 * y2 - y1 * x2;
+
+  float mag = sqrt ( rotVec[0]*rotVec[0] + rotVec[1]*rotVec[1] + rotVec[2]*rotVec[2] );
+  rotVec[0] = rotVec[0] / mag;
+  rotVec[1] = rotVec[1] / mag;
+  rotVec[2] = rotVec[2] / mag;
+  
+}
+
+void Kernel::rotateArbitraryVector ( float &angle )
+{
+
+  float a = angle * M_PI / 180.;
+
+  float x = rotVec[0];
+  float y = rotVec[1];
+  float z = rotVec[2];
+
+  float rot11 = cos(a) + (x * x) * (1 - cos(a));
+  float rot21 = z * sin(a) + x * y * (1 - cos(a));
+  float rot31 = y * sin(a) + x * z * (1 - cos(a));
+  float rot12 = x * y * (1 - cos(a)) - z * sin(a);
+  float rot22 = cos(a) + (y * y) * (1 - cos(a));
+  float rot32 = x * sin(a) + y * z * (1 - cos(a));
+  float rot13 = y * sin(a) + x * z * (1 - cos(a));
+  float rot23 = x * sin(a) + y * z * (1 - cos(a));
+  float rot33 = cos(a) + (z * x) * (1 - cos(a));
+
+  rot23 = (-1) * rot23;
+  rot31 = (-1) * rot31;
+
+  regXRot = new float [numGLL];
+  regYRot = new float [numGLL];
+  regZRot = new float [numGLL];
+
+  for ( size_t i=0; i<numGLL; i++ ) {
+
+    regXRot[i] = rot11 * xExt[i] + rot21 * yExt[i] + rot31 * zExt[i];
+    regYRot[i] = rot12 * xExt[i] + rot22 * yExt[i] + rot32 * zExt[i];
+    regZRot[i] = rot13 * xExt[i] + rot23 * yExt[i] + rot33 * zExt[i];
+  }
+
+  for ( size_t i=0; i<numGLL; i++ ) {
+    xExt[i] = regXRot[i];
+    yExt[i] = regYRot[i];
+    zExt[i] = regZRot[i];
+  }
+
+  delete [] regXRot;
+  delete [] regYRot;
+  delete [] regZRot;
 
 }
 
@@ -458,12 +519,17 @@ void Kernel::getMinMaxCartesian ()
   centerY = (minY + maxY) / 2.;
   centerZ = (minZ + maxZ) / 2.;
 
+  centerC = (minC + maxC) / 2.;
+  centerL = (minL + maxL) / 2.;
+  centerR = (minR + maxR) / 2.;
+
 }
 
 void Kernel::quickSortPoint ( int i1st, int i2nd,
                               float px, float py, float pz )
 {
 
+  
   int pivotElement;
 
   // Distance of two points from box center.
@@ -543,6 +609,11 @@ float Kernel::distFromPoint ( float &x,  float &y,  float &z,
 float Kernel::distFromCenter ( float &x, float &y, float &z )
 {
 
+  // WARNING WARNING TODO.
+  centerX = 0.;
+  centerY = 0.;
+  centerZ = centerR; 
+
   float diffX = ( x - centerX );
   float diffY = ( y - centerY );
   float diffZ = ( z - centerZ );
@@ -609,16 +680,28 @@ void Kernel::writeExodus ( )
         connect[count+5] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NZ];
         connect[count+6] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NY*NZ+NZ];
         connect[count+7] = nodeNumArr[(k+1)+(NZ)*(j+i*NY)+NY*NZ];
-        count=count+8;
+        count           += 8;
 
       }
     }
   }
 
-
   std::cout << "Writing exodus file." << std::flush << std::endl;
-  int idexo = ex_create ( "./test.ex2", EX_CLOBBER, &comp_ws, &io_ws );
 
+  // Interpolated array.
+  int idexo = ex_create ( "./testInterp.ex2", EX_CLOBBER, &comp_ws, &io_ws );
+  exodusErrorCheck ( ex_put_init( idexo, "Kernel", nDim, numNodes, numElem, nBlock, nNodeSet, nSideSet ), "ex_put_init" );
+  exodusErrorCheck ( ex_put_coord ( idexo, nodeCorX, nodeCorY, nodeCorZ ), "ex_put_coord" );
+  exodusErrorCheck ( ex_put_elem_block ( idexo, 1, "HEX", numElem, nNodePerElem, 0 ), "ex_put_elem_block" );
+  exodusErrorCheck ( ex_put_node_num_map ( idexo, nodeNumArr ), "ex_put_node_num_map" );
+  exodusErrorCheck ( ex_put_elem_conn  ( idexo, 1, connect ), "ex_put_elem_conn" );
+  exodusErrorCheck ( ex_put_var_param ( idexo, "n", nVars ), "ex_put_var_param" );
+  exodusErrorCheck ( ex_put_var_names ( idexo, "n", nVars, varNames ), "ex_put_var_names" );
+  exodusErrorCheck ( ex_put_nodal_var ( idexo, 1, 1, numNodes, regMeshArr ), "ex_put_nodal_var" ); 
+  exodusErrorCheck ( ex_close ( idexo ), "ex_close" );
+
+  // Smoothed array.
+  idexo = ex_create ( "./testSmooth.ex2", EX_CLOBBER, &comp_ws, &io_ws );
   exodusErrorCheck ( ex_put_init( idexo, "Kernel", nDim, numNodes, numElem, nBlock, nNodeSet, nSideSet ), "ex_put_init" );
   exodusErrorCheck ( ex_put_coord ( idexo, nodeCorX, nodeCorY, nodeCorZ ), "ex_put_coord" );
   exodusErrorCheck ( ex_put_elem_block ( idexo, 1, "HEX", numElem, nNodePerElem, 0 ), "ex_put_elem_block" );
@@ -628,7 +711,6 @@ void Kernel::writeExodus ( )
   exodusErrorCheck ( ex_put_var_names ( idexo, "n", nVars, varNames ), "ex_put_var_names" );
   exodusErrorCheck ( ex_put_nodal_var ( idexo, 1, 1, numNodes, smoothArr ), "ex_put_nodal_var" ); 
   exodusErrorCheck ( ex_close ( idexo ), "ex_close" );
-
 }
 
 void exodusErrorCheck ( int ier, std::string function )
